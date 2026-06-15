@@ -133,7 +133,7 @@ jobs:
           BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           FIRST_APK=$(ls repo/apk/*.apk | head -1)
           FP=$("$BUILD_TOOLS/apksigner" verify --print-certs "$FIRST_APK" \
-            | awk -F': ' '/SHA-256 digest/{print $2; exit}')
+            | grep -i "SHA-256 digest" | head -1 | awk '{print $NF}')
           echo "Signing fingerprint: $FP"
           echo "SIGNING_FINGERPRINT=$FP" >> "$GITHUB_ENV"
 
