@@ -11,6 +11,10 @@ on:
         description: "owner/repo of your fork of extensions-source"
         required: true
         default: "QuentinVdr/extensions-source"
+      extensions:
+        description: "Optional: build only these (e.g. 'fr/raijinscans en/foo'). Empty = auto-detect changes vs upstream."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -57,6 +61,7 @@ jobs:
           python-version: "3.12"
 
       - name: Compute diff base against upstream
+        if: inputs.extensions == ''
         working-directory: main
         run: |
           git remote add upstream https://github.com/keiyoushi/extensions-source.git
@@ -67,6 +72,7 @@ jobs:
 
       - name: Compute changed modules
         id: gen
+        if: inputs.extensions == ''
         working-directory: main
         env:
           CI_CHUNK_SIZE: "1000"
@@ -77,8 +83,10 @@ jobs:
         id: flat
         env:
           MATRIX: ${{ steps.gen.outputs.matrix }}
+          MANUAL: ${{ inputs.extensions }}
+          FORK_DIR: main
         run: |
-          MODS=$(python -c "import os,json;d=json.loads(os.environ['MATRIX']);print(' '.join(m for c in d.get('chunk',[]) for m in c['modules']))")
+          MODS=$(python scripts/resolve-modules.py)
           echo "Modules to build: ${MODS:-<none>}"
           echo "modules=$MODS" >> "$GITHUB_OUTPUT"
           if [ -z "$MODS" ]; then echo "empty=true" >> "$GITHUB_OUTPUT"; else echo "empty=false" >> "$GITHUB_OUTPUT"; fi

@@ -26,6 +26,10 @@ Keep the official Keiyoushi repo added alongside it.
    different from the default).
 3. When it finishes, refresh extensions in the app and install/update.
 
+By default it builds **only the extensions your branch changed** vs `upstream/main` — never
+all of them. To force a specific set instead, fill the optional **extensions** input with
+space- or comma-separated `lang/name` entries, e.g. `fr/raijinscans` or `fr/raijinscans en/foo`.
+
 ## How it works
 
 - Checks out the fork at the chosen branch and diffs it against `upstream/main` to find the
