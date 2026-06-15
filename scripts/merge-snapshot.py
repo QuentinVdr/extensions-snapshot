@@ -62,13 +62,25 @@ else:
 
 built_pkgs = {e["pkg"] for e in local_index}
 
+# Suffix added to each extension's display name so snapshot builds are obviously
+# distinct from the official Keiyoushi ones in the browse list.
+name_suffix = os.environ.get("REPO_NAME_SUFFIX", "(Snapshot)").strip()
+
+
+def label(name: str) -> str:
+    clean = name.replace("Tachiyomi: ", "").strip()
+    if name_suffix and not clean.endswith(name_suffix):
+        return f"{clean} {name_suffix}"
+    return clean
+
+
 kept, dropped = [], []
 for entry in local_index:
     upstream = official_code.get(entry["pkg"])
     if upstream is not None and upstream >= entry["code"]:
         dropped.append(entry["pkg"])
     else:
-        kept.append(entry)
+        kept.append({**entry, "name": label(entry["name"])})
 
 # Rebuild the published index: keep everything previously published except the
 # packages we (re)built this run, then add back the ones we're keeping.
@@ -95,8 +107,8 @@ with (REMOTE / "index.min.json").open("w", encoding="utf-8") as f:
 repo_json = {
     "index_v2": None,
     "meta": {
-        "name": os.environ.get("REPO_NAME") or "Extensions Snapshot",
-        "shortName": os.environ.get("REPO_SHORTNAME") or None,
+        "name": os.environ.get("REPO_NAME") or "QuentinVdr Snapshot",
+        "shortName": os.environ.get("REPO_SHORTNAME") or "SNAP",
         "website": os.environ.get("REPO_WEBSITE")
         or "https://github.com/QuentinVdr/extensions-snapshot",
         "signingKeyFingerprint": os.environ.get("SIGNING_FINGERPRINT", ""),
