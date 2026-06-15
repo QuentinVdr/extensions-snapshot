@@ -45,13 +45,19 @@ remote_index = load_index(REMOTE / "index.min.json")
 local_index = load_index(LOCAL / "index.min.json")
 
 # Official upstream versions, for the "override on merge" filter.
-try:
-    with urllib.request.urlopen(OFFICIAL_INDEX_URL, timeout=60) as resp:
-        official = json.load(resp)
-    official_code = {e["pkg"]: e["code"] for e in official}
-except Exception as err:  # noqa: BLE001 - non-fatal, just skip the filter
-    print(f"WARN: could not fetch official index ({err}); skipping override filter")
+# Set SKIP_OVERRIDE_FILTER=true (the `force` workflow input) to publish even when
+# upstream already has the extension at the same-or-higher version.
+if os.environ.get("SKIP_OVERRIDE_FILTER", "").lower() == "true":
+    print("force=true -> skipping override filter, publishing all built extensions")
     official_code = {}
+else:
+    try:
+        with urllib.request.urlopen(OFFICIAL_INDEX_URL, timeout=60) as resp:
+            official = json.load(resp)
+        official_code = {e["pkg"]: e["code"] for e in official}
+    except Exception as err:  # noqa: BLE001 - non-fatal, just skip the filter
+        print(f"WARN: could not fetch official index ({err}); skipping override filter")
+        official_code = {}
 
 built_pkgs = {e["pkg"] for e in local_index}
 

@@ -30,6 +30,16 @@ By default it builds **only the extensions your branch changed** vs `upstream/ma
 all of them. To force a specific set instead, fill the optional **extensions** input with
 space- or comma-separated `lang/name` entries, e.g. `fr/raijinscans` or `fr/raijinscans en/foo`.
 
+### Important: bump the version
+
+An extension is only published if its `extVersionCode` (in `src/<lang>/<name>/build.gradle`)
+is **higher** than the version in the official Keiyoushi repo. Otherwise the override filter
+assumes upstream already has it and drops it (nothing gets published). Bumping the version is
+required for the upstream PR anyway, so do it on your branch.
+
+If you just want to test without bumping, tick the **force** input — it skips the override
+filter and publishes whatever was built.
+
 ## How it works
 
 - Checks out the fork at the chosen branch and diffs it against `upstream/main` to find the

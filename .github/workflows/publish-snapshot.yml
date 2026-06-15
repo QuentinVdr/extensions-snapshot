@@ -15,6 +15,10 @@ on:
         description: "Optional: build only these (e.g. 'fr/raijinscans en/foo'). Empty = auto-detect changes vs upstream."
         required: false
         default: ""
+      force:
+        description: "Publish even if upstream already has the extension at the same/higher version (skip override filter)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -76,7 +80,8 @@ jobs:
         working-directory: main
         env:
           CI_CHUNK_SIZE: "1000"
-          IS_PR_CHECK: "false"
+          # "true" skips the fork's always_build.json so we only build YOUR changes.
+          IS_PR_CHECK: "true"
         run: python .github/scripts/generate-build-matrices.py "$BASE" Release
 
       - name: Resolve module list
@@ -129,6 +134,7 @@ jobs:
         if: steps.flat.outputs.empty != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SKIP_OVERRIDE_FILTER: ${{ inputs.force }}
         run: |
           set -e
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
