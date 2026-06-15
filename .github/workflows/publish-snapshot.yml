@@ -129,6 +129,13 @@ jobs:
           java -jar Inspector.jar repo/apk output.json tmp
           python .github/scripts/create-repo.py
           echo "Built index.min.json:"; cat repo/index.min.json; echo
+          # SHA-256 of the APK signing cert -> repo.json signingKeyFingerprint
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          FIRST_APK=$(ls repo/apk/*.apk | head -1)
+          FP=$("$BUILD_TOOLS/apksigner" verify --print-certs "$FIRST_APK" \
+            | awk -F': ' '/SHA-256 digest/{print $2; exit}')
+          echo "Signing fingerprint: $FP"
+          echo "SIGNING_FINGERPRINT=$FP" >> "$GITHUB_ENV"
 
       - name: Publish to gh-pages
         if: steps.flat.outputs.empty != 'true'

@@ -88,6 +88,23 @@ for entry in kept:
 with (REMOTE / "index.min.json").open("w", encoding="utf-8") as f:
     json.dump(merged, f, ensure_ascii=False, separators=(",", ":"))
 
+# repo.json is what Mihon actually fetches (it rewrites .../index.min.json ->
+# .../repo.json). With index_v2 = null it uses the legacy path and reads the
+# index.min.json above. signingKeyFingerprint is the SHA-256 of our APK signing
+# cert so installs are trusted without a manual prompt.
+repo_json = {
+    "index_v2": None,
+    "meta": {
+        "name": os.environ.get("REPO_NAME") or "Extensions Snapshot",
+        "shortName": os.environ.get("REPO_SHORTNAME") or None,
+        "website": os.environ.get("REPO_WEBSITE")
+        or "https://github.com/QuentinVdr/extensions-snapshot",
+        "signingKeyFingerprint": os.environ.get("SIGNING_FINGERPRINT", ""),
+    },
+}
+with (REMOTE / "repo.json").open("w", encoding="utf-8") as f:
+    json.dump(repo_json, f, ensure_ascii=False)
+
 # Prune apk/icon files no longer referenced by the published index.
 referenced_apk = {e["apk"] for e in merged}
 referenced_icon = {f'{e["pkg"]}.png' for e in merged}
