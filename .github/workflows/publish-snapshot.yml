@@ -1,0 +1,146 @@
+name: Publish snapshot
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch in your fork to build & publish"
+        required: true
+        default: "main"
+      fork:
+        description: "owner/repo of your fork of extensions-source"
+        required: true
+        default: "QuentinVdr/extensions-source"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-snapshot
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    name: Build & publish snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Referenced in `if:` below; secrets can't be used in conditions directly.
+      HAS_SIGNING_KEY: ${{ secrets.SIGNING_KEY != '' }}
+    steps:
+      - name: Checkout snapshot repo (this repo)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout fork at chosen branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.fork }}
+          ref: ${{ inputs.branch }}
+          fetch-depth: 0
+          path: main
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compute diff base against upstream
+        working-directory: main
+        run: |
+          git remote add upstream https://github.com/keiyoushi/extensions-source.git
+          git fetch -q upstream main
+          BASE=$(git merge-base HEAD upstream/main)
+          echo "Diff base: $BASE"
+          echo "BASE=$BASE" >> "$GITHUB_ENV"
+
+      - name: Compute changed modules
+        id: gen
+        working-directory: main
+        env:
+          CI_CHUNK_SIZE: "1000"
+          IS_PR_CHECK: "false"
+        run: python .github/scripts/generate-build-matrices.py "$BASE" Release
+
+      - name: Resolve module list
+        id: flat
+        env:
+          MATRIX: ${{ steps.gen.outputs.matrix }}
+        run: |
+          MODS=$(python -c "import os,json;d=json.loads(os.environ['MATRIX']);print(' '.join(m for c in d.get('chunk',[]) for m in c['modules']))")
+          echo "Modules to build: ${MODS:-<none>}"
+          echo "modules=$MODS" >> "$GITHUB_OUTPUT"
+          if [ -z "$MODS" ]; then echo "empty=true" >> "$GITHUB_OUTPUT"; else echo "empty=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: No changes vs upstream
+        if: steps.flat.outputs.empty == 'true'
+        run: echo "::notice::Branch '${{ inputs.branch }}' has no extension changes vs upstream/main. Nothing to publish."
+
+      - name: Prepare signing key
+        if: steps.flat.outputs.empty != 'true' && env.HAS_SIGNING_KEY == 'true'
+        working-directory: main
+        run: echo "${{ secrets.SIGNING_KEY }}" | base64 -d > signingkey.jks
+
+      - name: Build changed extensions
+        if: steps.flat.outputs.empty != 'true'
+        working-directory: main
+        env:
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew ${{ steps.flat.outputs.modules }}
+
+      - name: Assemble snapshot repo
+        if: steps.flat.outputs.empty != 'true'
+        working-directory: main
+        run: |
+          set -e
+          rm -rf repo && mkdir -p repo/apk
+          find . -path '*/build/outputs/apk/release/*.apk' | while read -r apk; do
+            cp "$apk" "repo/apk/$(basename "$apk" | sed 's/-release\.apk$/.apk/')"
+          done
+          echo "Collected APKs:"; ls -1 repo/apk
+          INSPECTOR_LINK="$(curl -s https://api.github.com/repos/keiyoushi/extensions-inspector/releases/latest | jq -r '.assets[0].browser_download_url')"
+          curl -L "$INSPECTOR_LINK" -o Inspector.jar
+          java -jar Inspector.jar repo/apk output.json tmp
+          python .github/scripts/create-repo.py
+          echo "Built index.min.json:"; cat repo/index.min.json; echo
+
+      - name: Publish to gh-pages
+        if: steps.flat.outputs.empty != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git clone -q --branch gh-pages --single-branch "$REPO_URL" pages; then
+            echo "Checked out existing gh-pages"
+          else
+            echo "Creating gh-pages branch"
+            mkdir pages && cd pages
+            git init -q -b gh-pages
+            git remote add origin "$REPO_URL"
+            echo "[]" > index.min.json
+            mkdir -p apk icon
+            cd ..
+          fi
+          python scripts/merge-snapshot.py "main/repo" "pages"
+          cd pages
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "snapshot ${{ inputs.fork }}@${{ inputs.branch }} ($(date -u +%FT%TZ))" \
+            || { echo "::notice::No changes to publish."; exit 0; }
+          git push -q origin gh-pages
+          echo "::notice::Published. Repo URL: https://$(echo "${GITHUB_REPOSITORY%/*}" | tr 'A-Z' 'a-z').github.io/${GITHUB_REPOSITORY#*/}/index.min.json"
