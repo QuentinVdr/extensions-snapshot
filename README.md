@@ -51,11 +51,16 @@ filter and publishes whatever was built.
   your PR merges and Keiyoushi publishes, the app falls back to the official build
   automatically.
 
-## Signing (recommended, optional)
+## Signing (strongly recommended)
 
-Without a key, builds use a debug signature — works, but each rebuild changes the signer and
-forces an uninstall/reinstall on the device. To get smooth in-place updates, create one
-keystore and add these repo **Actions secrets**:
+The publish step writes a `repo.json` whose `signingKeyFingerprint` is the SHA-256 of the APK
+signing cert — that's how Mihon trusts the extensions.
+
+Without your own key, builds use the runner's **debug** keystore, which is regenerated on
+every CI run. That means the fingerprint (and APK signer) changes each publish, so Mihon will
+re-prompt to trust the repo and force reinstalls on every rebuild. Add one persistent keystore
+to make the fingerprint stable and updates seamless. Create it once and add these repo
+**Actions secrets**:
 
 | Secret | Value |
 | --- | --- |
