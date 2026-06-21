@@ -37,12 +37,12 @@ jobs:
       HAS_SIGNING_KEY: ${{ secrets.SIGNING_KEY != '' }}
     steps:
       - name: Checkout snapshot repo (this repo)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Checkout fork at chosen branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.fork }}
           ref: ${{ inputs.branch }}
